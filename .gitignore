@@ -1,0 +1,11 @@
+# Python compiled files
+__pycache__/
+*.py[cod]
+
+# Google Sheets credentials
+credentials.json
+
+# Generated files
+*.xlsx
+output_image.png
+reconstructed_image.png

@@ -6,6 +6,9 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 import openpyxl
 from PIL import Image
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import re
 
 '''
 This function will take in an image name/path, read in the image's rgb data for it's pixels, and then write these pixels to an excel spreadsheet,
@@ -66,6 +69,57 @@ def Convert_Image_To_Excel_Spreadsheet(image_path, resolution=.3, output_file="r
     #don't forget to save.
     wb.save(output_file)
 
+def Convert_Google_Sheet_To_Image(spreadsheet_url, output_file="output_image.png", credentials_file="credentials.json"):
+    """
+    This function converts a Google spreadsheet to an image.
+    It reads the RGB values from the cells and reconstructs the image.
+    
+    Args:
+        spreadsheet_url (str): URL of the Google Spreadsheet
+        output_file (str): Path where to save the output image (default: "output_image.png")
+        credentials_file (str): Path to the Google Sheets API credentials file
+    """
+    # Setup the credentials
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+    client = gspread.authorize(credentials)
+    
+    # Extract spreadsheet ID from URL
+    match = re.search(r'/d/([a-zA-Z0-9-_]+)', spreadsheet_url)
+    if match:
+        spreadsheet_id = match.group(1)
+    else:
+        raise ValueError("Invalid Google Sheets URL")
+    
+    # Open the spreadsheet
+    sheet = client.open_by_key(spreadsheet_id).sheet1
 
+    # Find the dimensions of the image
+    max_row = sheet.max_row
+    max_col = sheet.max_column
+    width = max_col // 3  # Since we used 3 cells per pixel
+    height = max_row
 
+    # Create a new image with the same dimensions
+    image = Image.new('RGB', (width, height))
+    pixels = []
 
+    # Read the RGB values from the Excel cells
+    for row in range(1, max_row + 1):
+        row_pixels = []
+        for x in range(width):
+            # Get RGB values from the three cells representing one pixel
+            r = int(sheet[f"{get_column_letter(x * 3 + 1)}{row}"].value or 0)
+            g = int(sheet[f"{get_column_letter(x * 3 + 2)}{row}"].value or 0)
+            b = int(sheet[f"{get_column_letter(x * 3 + 3)}{row}"].value or 0)
+            row_pixels.append((r, g, b))
+        pixels.append(row_pixels)
+
+    # Put the pixels in the image
+    for y in range(height):
+        for x in range(width):
+            if y < len(pixels) and x < len(pixels[y]):
+                image.putpixel((x, y), pixels[y][x])
+
+    # Save the image
+    image.save(output_file)
